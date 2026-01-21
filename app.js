@@ -2,12 +2,13 @@ const express = require('express');
 const app = express();
 const mongoose =  require('mongoose');
 const Listing = require('./models/listing');
+const Review = require('./models/review');
 const path = require('path');
 const ejsMate = require('ejs-mate');
 const wrapAsync = require('./utils/wrapAsync');
 const ExpressError = require('./utils/ExpressError');
 const methodoverride = require('method-override');
-const { listingSchema } = require('./schema.js');
+const { listingSchema , reviewSchema } = require('./schema.js');
 
 app.set('view_engine','ejs');
 app.set('views',path.join(__dirname,'/views'));
@@ -37,7 +38,7 @@ app.get('/',(req,res)=>{
 });
 
 
-
+//middleware to validate listing data
 const validateListing = (req,res,next)=>{
     let {error} = listingSchema.validate(req.body) ;
         if(error){
@@ -47,6 +48,19 @@ const validateListing = (req,res,next)=>{
             next();
         }
 }
+//middleware to validate review data
+const validateReview = (req,res,next)=>{
+    let {error} = reviewSchema.validate(req.body) ;
+        if(error){
+            let msg = error.details.map(el=>el.message).join(',');
+            throw new ExpressError(400,msg);
+        }else{
+            next();
+        }
+}
+
+
+
 //index route to show all listings
 app.get('/listings', wrapAsync( async (req,res)=>{
     const listings = await Listing.find({});
@@ -59,6 +73,8 @@ app.get('/listings/new',(req,res)=>{
     res.render('listings/new.ejs');
 });
 
+
+//create route to create a new listing witht the middleware to validate listing data
 app.post('/listings', validateListing, wrapAsync( async (req,res,next)=>{
         
         const newListing = new Listing(req.body.listing);
@@ -95,11 +111,28 @@ app.put('/listings/:id', validateListing, wrapAsync( async (req,res)=>{
     res.redirect(`/listings/${id}`);
 }));
 
+
+//Delete route to delete a listing
 app.delete('/listings/:id', wrapAsync(async(req,res)=>{
     let {id}= req.params;
     await Listing.findByIdAndDelete(id);
     res.redirect('/listings');
 }));
+
+
+//reviews 
+app.post('/listings/:id/reviews', validateReview , wrapAsync(async (req,res)=>{
+    let listing = await Listing.findById(req.params.id);
+    let newReview = new Review(req.body.review);
+    listing.reviews.push(newReview);
+    await newReview.save();
+    await listing.save();
+    res.redirect(`/listings/${listing.id}`);
+}));
+
+
+
+
 // app.get('/testlistings',async (req,res)=>{
 //     let samplemodel = new Listing({
 //         title: "Sample Listing",
